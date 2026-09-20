@@ -131,4 +131,4 @@ Los incumplimientos se asocian principalmente a la carga contaminante que llega 
 ## Autor
 
 Claudio Navarro Vaccaro – Ingeniería en Informática, IACC.
-Asignatura: Ciencia de Datos (CIEDT1301), Semana 8.
+Asignatura: Ciencia de Datos, Semana 8.
