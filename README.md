@@ -16,6 +16,7 @@ AquaLimpia S. A. trata aguas residuales urbanas e industriales en tres plantas. 
 - Evaluar la relación entre el caudal de entrada y la DBO del efluente (H1).
 - Evaluar la relación entre la carga contaminante de entrada y la DBO del efluente (H2).
 - Comparar el desempeño y el cumplimiento normativo entre plantas (H3).
+- Evaluar la calidad de los datos y sus efectos en las conclusiones.
 - Generar reportes diferenciados para las áreas de Operaciones y Gestión Ambiental.
 
 ## Estructura del repositorio
@@ -24,7 +25,12 @@ AquaLimpia S. A. trata aguas residuales urbanas e industriales en tres plantas. 
 aqualimpia-analisis/
 ├── data/               # Dataset original (no se modifica)
 ├── notebooks/          # Notebook del análisis
-├── outputs/            # Reportes por área (Excel)
+├── src/                # Funciones reutilizables
+│   ├── procesamiento.py    # Carga, eficiencia y alertas (NumPy)
+│   ├── analisis.py         # Correlaciones, intervalos y chi-cuadrado (SciPy)
+│   ├── calidad.py          # Evaluación de calidad de datos
+│   └── reportes.py         # Exportación de reportes y resultados (Joblib)
+├── outputs/            # Reportes por área y resultados serializados
 ├── dashboard/          # Dashboard exploratorio (PNG)
 ├── requirements.txt    # Versiones de Python y librerías
 └── README.md           # Este documento
@@ -51,12 +57,13 @@ Variable derivada: `eficiencia_remocion_pct = (DBO_entrada − DBO_salida) / DBO
 
 ## Proceso
 
-1. **Entorno:** clonado del repositorio y registro de versiones.
-2. **Carga y validación:** revisión de dimensiones, valores faltantes y tipos de datos. La fecha se convierte con formato explícito.
+1. **Entorno:** clonado del repositorio, registro de versiones e importación de los módulos de `src/`.
+2. **Carga y validación:** lectura del dataset con conversión explícita de la fecha.
 3. **Transformación:** cálculo de la eficiencia de remoción.
-4. **Análisis:** correlación de Pearson (H1 y H2), comparación por planta y prueba chi-cuadrado de independencia (H3).
-5. **Visualización:** dashboard con un panel por hipótesis.
-6. **Exportación:** reportes para Operaciones y Gestión Ambiental.
+4. **Calidad de datos:** completitud, unicidad, rangos válidos, atípicos, consistencia y cobertura temporal, con análisis de sensibilidad.
+5. **Análisis:** correlación de Pearson con p-valor (H1 y H2), resumen por planta con intervalos de confianza y prueba chi-cuadrado (H3).
+6. **Visualización:** dashboard con un panel por hipótesis.
+7. **Exportación:** reportes por área y resultados serializados con Joblib.
 
 ## Cómo reproducir el análisis
 
@@ -69,15 +76,22 @@ El notebook clona este repositorio y genera los resultados en `outputs/` y `dash
 pip install -r requirements.txt
 ```
 
+Para reutilizar los resultados sin ejecutar el análisis:
+
+```python
+from src.reportes import cargar_resultados
+resultados = cargar_resultados()
+```
+
 ## Resultados principales
 
 | Hipótesis | Evidencia | Resultado |
 |---|---|---|
-| H1: Caudal de entrada | r = 0,10 | No respaldada |
-| H2: Carga contaminante | r = 0,76 (r² ≈ 0,58) | Respaldada |
-| H3: Diferencias entre plantas | Eficiencias de 86,65 % a 87,51 %; χ²(2) = 2,85, p = 0,240 | No respaldada |
+| H1: Caudal de entrada | r = 0,10; p = 0,144 | No respaldada |
+| H2: Carga contaminante | r = 0,76; r² = 0,58; p < 0,001 | Respaldada |
+| H3: Diferencias entre plantas | Eficiencia entre 86,65 % y 87,51 % con IC 95 % solapados; χ²(2) = 2,85; p = 0,240 | No respaldada |
 
-Los incumplimientos se asocian principalmente a la carga contaminante que llega a las plantas. La eficiencia de remoción es estable (promedio 87,09 %, DE 3,10), por lo que la DBO de salida depende en gran medida de la DBO de entrada. Las acciones con mayor potencial apuntan a controlar la carga aguas arriba y a ajustar la operación en días de carga alta, más que a intervenir una planta en particular.
+Los incumplimientos se asocian principalmente a la carga contaminante que llega a las plantas. La eficiencia de remoción es estable (promedio 87,09 %; DE 3,10), por lo que la DBO de salida depende en gran medida de la DBO de entrada. Las acciones con mayor potencial apuntan a controlar la carga aguas arriba y a ajustar la operación en días de carga alta, más que a intervenir una planta en particular.
 
 ![Dashboard exploratorio](dashboard/dashboard_exploratorio.png)
 
@@ -87,16 +101,32 @@ Los incumplimientos se asocian principalmente a la carga contaminante que llega 
 |---|---|---|
 | `outputs/reporte_operaciones.xlsx` | Operaciones | Fecha, planta, caudal, DBO de entrada y salida, eficiencia, energía, lodos y alertas |
 | `outputs/reporte_gestion_ambiental.xlsx` | Gestión Ambiental | Fecha, planta, DBO de salida y estado de cumplimiento |
+| `outputs/resultados_analisis.joblib` | Equipo de análisis | Correlaciones, resumen por planta, pruebas chi-cuadrado y umbrales |
 
 **Alertas operativas** (umbrales exploratorios derivados de los datos, no normativos):
-- **Carga alta:** DBO de entrada sobre el percentil 75 (333,2 mg/L). El 96 % de los días con alerta no cumplieron la norma, pero la alerta solo captura el 31 % del total de incumplimientos.
+- **Carga alta:** DBO de entrada sobre el percentil 75 (333,2 mg/L). El 96 % de los días con alerta no cumplieron la norma (χ² = 11,71; p < 0,001), pero la alerta solo captura el 31 % del total de incumplimientos.
 - **Eficiencia baja:** eficiencia bajo el percentil 10 (82,92 %).
+
+## Calidad de los datos
+
+| Dimensión | Resultado |
+|---|---|
+| Completitud | Sin valores faltantes |
+| Validez | Sin valores físicamente imposibles |
+| Atípicos | 9 valores en 4 variables, plausibles. No se eliminan |
+| Unicidad | 82 registros (41 %) en 38 combinaciones planta-fecha repetidas |
+| Consistencia | 28 registros "No cumple" con DBO de salida ≤ 29,5 mg/L |
+| Cobertura | Entre 33,3 % y 49,2 % de los días con registro por planta |
+
+- **Registros repetidos:** no se eliminaron porque no hay criterio para decidir cuál es el correcto. Un análisis de sensibilidad sin estos registros (n = 118) mantiene todas las conclusiones.
+- **Etiqueta de cumplimiento:** los registros "No cumple" con DBO baja presentan sólidos suspendidos de entrada significativamente mayores (t de Welch, p < 0,001). Esto sugiere que el cumplimiento depende de más de un parámetro normativo no incluido en el dataset.
 
 ## Limitaciones
 
 - La correlación indica asociación, no causalidad.
-- Las muestras por planta (54 a 75 registros) limitan la capacidad de detectar diferencias pequeñas.
-- La variable `cumplimiento_norma` presenta inconsistencias con los valores de DBO de salida. Se mantiene tal como viene en los datos originales.
+- El dataset no documenta el criterio de cumplimiento ni el límite normativo aplicado.
+- La cobertura temporal incompleta impide analizar series diarias continuas.
+- Las muestras por planta (54 a 75 registros) limitan la detección de diferencias pequeñas.
 
 ## Autor
 
